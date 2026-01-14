@@ -1,0 +1,2 @@
+print("mulai")
+loadstring(game:HttpGet("https://raw.githubusercontent.com/06mrx/fishit/refs/heads/main/leak.txt"))()

@@ -213,7 +213,7 @@ function Library:CreateWindow(config, isFishing)
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     ScreenGui.Parent = game.CoreGui
 
-    if isFishing then ShowAlertModal(ScreenGui, "Notif Hanya Pemanis, Secret Number 1!") end
+    if isFishing then ShowAlertModal(ScreenGui, "Notif Hanya Pemanis, Secret Number 1! PUNYA NICH HUB, FREE SCRIPT") end
 
     -- Batasi tinggi di mobile
     local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled

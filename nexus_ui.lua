@@ -230,24 +230,18 @@ function NexusUI:CreateWindow(title, subtitle)
 	if _ then uiCorner(_, 4) end
 
 	-- title
-	label(header, title or "NexusUI", 16, Theme.Text, Enum.Font.GothamBold):
-		-- reposition manually
-		(function(lbl)
-			lbl.Position = UDim2.new(0, 34, 0, 10)
-			lbl.AutomaticSize = Enum.AutomaticSize.None
-			lbl.Size = UDim2.new(1, -70, 0, 18)
-		end)(newInst("TextLabel", {
-			Text = title or "NexusUI",
-			TextSize = 15,
-			TextColor3 = Theme.Text,
-			Font = Enum.Font.GothamBold,
-			BackgroundTransparency = 1,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Size = UDim2.new(1, -70, 0, 18),
-			Position = UDim2.new(0, 34, 0, 10),
-			ZIndex = 4,
-			Parent = header
-		}))
+	newInst("TextLabel", {
+		Text = title or "NexusUI",
+		TextSize = 15,
+		TextColor3 = Theme.Text,
+		Font = Enum.Font.GothamBold,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.new(0, 34, 0, 10),
+		ZIndex = 4,
+		Parent = header
+	})
 
 	-- subtitle
 	newInst("TextLabel", {
@@ -392,7 +386,6 @@ function NexusUI:AddSection(window, title)
 			BackgroundTransparency = 1,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Size = UDim2.new(1, 0, 1, 0),
-			LetterSpacingOffset = 2,
 			ZIndex = 5,
 			Parent = hdr
 		})
@@ -555,7 +548,7 @@ function NexusUI:AddButton(section, lbl, callback, options)
 			ColorSequenceKeypoint.new(0, Color3.new(1,1,1)),
 			ColorSequenceKeypoint.new(1, Color3.new(0.85,0.85,0.85))
 		},
-		Transparency = TransparencySequence and TransparencySequence.new() or NumberSequence.new{
+		Transparency = NumberSequence.new{
 			NumberSequenceKeypoint.new(0, outlined and 0.85 or 0.15),
 			NumberSequenceKeypoint.new(1, outlined and 0.95 or 0.35)
 		},
@@ -894,7 +887,7 @@ function NexusUI:AddSlider(section, lbl, minVal, maxVal, default, callback)
 		if sliding and inp.UserInputType == Enum.UserInputType.MouseMovement then
 			local rel = (inp.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
 			rel = math.clamp(rel, 0, 1)
-			value = math.round(minVal + rel * (maxVal - minVal))
+			value = math.floor(minVal + rel * (maxVal - minVal) + 0.5)
 			local pct = (value - minVal) / (maxVal - minVal)
 			fill.Size = UDim2.new(pct, 0, 1, 0)
 			knob.Position = UDim2.new(pct, 0, 0.5, 0)

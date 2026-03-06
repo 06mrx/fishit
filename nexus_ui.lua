@@ -237,7 +237,7 @@ function NexusUI:CreateWindow(title, subtitle)
 		Font = Enum.Font.GothamBold,
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -70, 0, 18),
+		Size = UDim2.new(1, -110, 0, 18),
 		Position = UDim2.new(0, 34, 0, 10),
 		ZIndex = 4,
 		Parent = header
@@ -251,20 +251,20 @@ function NexusUI:CreateWindow(title, subtitle)
 		Font = Enum.Font.Gotham,
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, -70, 0, 14),
+		Size = UDim2.new(1, -110, 0, 14),
 		Position = UDim2.new(0, 34, 0, 30),
 		ZIndex = 4,
 		Parent = header
 	})
 
-	-- close button
+	-- close button (pojok kanan)
 	local closeBtn = newInst("TextButton", {
 		Text = "✕",
-		TextSize = 13,
+		TextSize = 12,
 		TextColor3 = Theme.TextDim,
 		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(0, 28, 0, 28),
-		Position = UDim2.new(1, -40, 0.5, -14),
+		Position = UDim2.new(1, -36, 0.5, -14),
 		BackgroundColor3 = Theme.Surface2,
 		BorderSizePixel = 0,
 		ZIndex = 5,
@@ -285,14 +285,14 @@ function NexusUI:CreateWindow(title, subtitle)
 		tween(closeBtn, {BackgroundColor3 = Theme.Surface2}, 0.15)
 	end)
 
-	-- minimize button
+	-- minimize button (sebelah kiri close)
 	local minBtn = newInst("TextButton", {
 		Text = "─",
-		TextSize = 13,
+		TextSize = 12,
 		TextColor3 = Theme.TextDim,
 		Font = Enum.Font.GothamBold,
 		Size = UDim2.new(0, 28, 0, 28),
-		Position = UDim2.new(1, -74, 0.5, -14),
+		Position = UDim2.new(1, -70, 0.5, -14),
 		BackgroundColor3 = Theme.Surface2,
 		BorderSizePixel = 0,
 		ZIndex = 5,

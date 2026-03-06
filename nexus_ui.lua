@@ -285,6 +285,117 @@ function NexusUI:CreateWindow(title, subtitle)
 		tween(closeBtn, {BackgroundColor3 = Theme.Surface2}, 0.15)
 	end)
 
+	-- minimize button
+	local minBtn = newInst("TextButton", {
+		Text = "─",
+		TextSize = 13,
+		TextColor3 = Theme.TextDim,
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.new(0, 28, 0, 28),
+		Position = UDim2.new(1, -74, 0.5, -14),
+		BackgroundColor3 = Theme.Surface2,
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = header
+	})
+	uiCorner(minBtn, 6)
+	minBtn.MouseEnter:Connect(function()
+		tween(minBtn, {TextColor3 = Theme.Accent}, 0.15)
+		tween(minBtn, {BackgroundColor3 = Color3.fromRGB(10,30,50)}, 0.15)
+	end)
+	minBtn.MouseLeave:Connect(function()
+		tween(minBtn, {TextColor3 = Theme.TextDim}, 0.15)
+		tween(minBtn, {BackgroundColor3 = Theme.Surface2}, 0.15)
+	end)
+
+	-- floating pill (logo saat minimize)
+	local pill = newInst("TextButton", {
+		Text = "  " .. (title or "NexusUI"),
+		TextSize = 11,
+		TextColor3 = Theme.Accent,
+		Font = Enum.Font.GothamBold,
+		Size = UDim2.new(0, 120, 0, 32),
+		Position = UDim2.new(0, 20, 0, 20),
+		BackgroundColor3 = Theme.Surface,
+		BorderSizePixel = 0,
+		Visible = false,
+		ZIndex = 200,
+		Parent = sg
+	})
+	uiCorner(pill, 16)
+	uiStroke(pill, Theme.Accent, 1.5)
+
+	-- dot di dalam pill
+	local pillDot = newInst("Frame", {
+		Size = UDim2.new(0, 7, 0, 7),
+		Position = UDim2.new(0, 10, 0.5, -3),
+		BackgroundColor3 = Theme.Accent,
+		BorderSizePixel = 0,
+		ZIndex = 201,
+		Parent = pill
+	})
+	uiCorner(pillDot, 4)
+
+	-- drag pill
+	local pillDragging, pillDragStart, pillStartPos = false, nil, nil
+	local pillMoved = false
+	pill.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+			pillDragging = true
+			pillMoved = false
+			pillDragStart = inp.Position
+			pillStartPos = pill.Position
+		end
+	end)
+	pill.InputEnded:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+			pillDragging = false
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(inp)
+		if pillDragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = inp.Position - pillDragStart
+			if delta.Magnitude > 4 then pillMoved = true end
+			pill.Position = UDim2.new(
+				pillStartPos.X.Scale, pillStartPos.X.Offset + delta.X,
+				pillStartPos.Y.Scale, pillStartPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	-- minimize / restore
+	local minimized = false
+
+	local function doMinimize()
+		minimized = true
+		tween(win, {Size = UDim2.new(0, 420, 0, 0), BackgroundTransparency = 1}, 0.2, Enum.EasingStyle.Quart)
+		tween(blurFrame, {BackgroundTransparency = 1}, 0.2)
+		task.delay(0.22, function()
+			win.Visible = false
+			blurFrame.Visible = false
+			pill.Visible = true
+		end)
+	end
+
+	local function doRestore()
+		minimized = false
+		win.Size = UDim2.new(0, 420, 0, 0)
+		win.BackgroundTransparency = 1
+		win.Visible = true
+		blurFrame.Visible = true
+		pill.Visible = false
+		tween(win, {Size = UDim2.new(0, 420, 0, 560), BackgroundTransparency = 0}, 0.3, Enum.EasingStyle.Back)
+		tween(blurFrame, {BackgroundTransparency = 0.55}, 0.3)
+	end
+
+	minBtn.MouseButton1Click:Connect(function()
+		if not minimized then doMinimize() end
+	end)
+
+	pill.MouseButton1Click:Connect(function()
+		if not pillMoved then doRestore() end
+	end)
+
 	-- scrolling content
 	local scroll = newInst("ScrollingFrame", {
 		Size = UDim2.new(1, 0, 1, -68),

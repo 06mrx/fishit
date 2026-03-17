@@ -1,0 +1,1427 @@
+-- ══════════════════════════════════════════════════════
+--  NiCH HUB · UI TEMPLATE · PURPLE THEME
+--  Revisi:
+--  - Toggle Light/Dark mode
+--  - Form input label kiri + input kanan (space-between)
+--  - Toast notification system
+--  - Minimize → window hilang, muncul FAB float
+--  - Padding tepi layar (mobile friendly)
+-- ══════════════════════════════════════════════════════
+
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+-- ════════════════════════════════════════
+--  TEMA WARNA (dark & light)
+-- ════════════════════════════════════════
+local DARK = {
+    BG          = Color3.fromRGB(13,  11,  20),
+    SURFACE     = Color3.fromRGB(19,  16,  32),
+    ELEVATED    = Color3.fromRGB(26,  22,  48),
+    BORDER      = Color3.fromRGB(42,  36,  80),
+    BORDER_HI   = Color3.fromRGB(90,  70, 160),
+    ACCENT      = Color3.fromRGB(157,111, 255),
+    ACCENT2     = Color3.fromRGB(192,132, 252),
+    HIGHLIGHT   = Color3.fromRGB(232,121, 249),
+    TEXT        = Color3.fromRGB(237,233, 255),
+    TEXT_MUTED  = Color3.fromRGB(123,111, 160),
+    SUCCESS     = Color3.fromRGB(134,239, 172),
+    ERROR       = Color3.fromRGB(244,114, 182),
+    WARN        = Color3.fromRGB(251,191,  36),
+    WHITE       = Color3.fromRGB(255,255, 255),
+}
+local LIGHT = {
+    BG          = Color3.fromRGB(245, 243, 255),
+    SURFACE     = Color3.fromRGB(255, 255, 255),
+    ELEVATED    = Color3.fromRGB(236, 232, 255),
+    BORDER      = Color3.fromRGB(200, 190, 235),
+    BORDER_HI   = Color3.fromRGB(157, 111, 255),
+    ACCENT      = Color3.fromRGB(120,  75, 220),
+    ACCENT2     = Color3.fromRGB(150,  90, 240),
+    HIGHLIGHT   = Color3.fromRGB(200,  60, 220),
+    TEXT        = Color3.fromRGB(30,   20,  60),
+    TEXT_MUTED  = Color3.fromRGB(120, 105, 160),
+    SUCCESS     = Color3.fromRGB(22,  140,  70),
+    ERROR       = Color3.fromRGB(210,  50, 100),
+    WARN        = Color3.fromRGB(180, 120,  10),
+    WHITE       = Color3.fromRGB(255, 255, 255),
+}
+
+local isDark = true
+local C = {}
+for k,v in pairs(DARK) do C[k] = v end
+
+-- ════════════════════════════════════════
+--  HELPERS
+-- ════════════════════════════════════════
+local ts = TweenService
+local function tw(obj, props, t, style)
+    if not obj or not obj.Parent then return end
+    ts:Create(obj, TweenInfo.new(t or 0.18,
+        style or Enum.EasingStyle.Quart,
+        Enum.EasingDirection.Out), props):Play()
+end
+
+local function mkCorner(p, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 10)
+    c.Parent = p
+end
+
+local function mkStroke(p, col, th)
+    local s = Instance.new("UIStroke")
+    s.Color = col
+    s.Thickness = th or 1.5
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = p
+    return s
+end
+
+local function mkPad(p, x, y)
+    local u = Instance.new("UIPadding")
+    u.PaddingLeft   = UDim.new(0, x)
+    u.PaddingRight  = UDim.new(0, x)
+    u.PaddingTop    = UDim.new(0, y)
+    u.PaddingBottom = UDim.new(0, y)
+    u.Parent = p
+end
+
+local function mkList(p, gap, dir)
+    local l = Instance.new("UIListLayout")
+    l.Padding       = UDim.new(0, gap or 8)
+    l.SortOrder     = Enum.SortOrder.LayoutOrder
+    l.FillDirection = dir or Enum.FillDirection.Vertical
+    l.Parent = p
+end
+
+-- ════════════════════════════════════════
+--  THEME MANAGER
+-- ════════════════════════════════════════
+local themeListeners = {} -- {obj, propName, darkVal, lightVal}
+
+local function addTheme(obj, propName, darkVal, lightVal)
+    if not obj then return end
+    table.insert(themeListeners, {obj=obj, prop=propName, dark=darkVal, light=lightVal})
+end
+
+local function applyTheme()
+    local palette = isDark and DARK or LIGHT
+    for k,v in pairs(palette) do C[k] = v end
+    for _, item in ipairs(themeListeners) do
+        if item.obj and item.obj.Parent then
+            local val = isDark and item.dark or item.light
+            if val ~= nil then
+                item.obj[item.prop] = val
+            end
+        end
+    end
+end
+
+-- Helper: daftarkan elemen sekaligus apply
+local function themed(obj, propName, darkVal, lightVal)
+    addTheme(obj, propName, darkVal, lightVal)
+    obj[propName] = isDark and darkVal or lightVal
+    return obj
+end
+
+-- ════════════════════════════════════════
+--  SCREENGUI
+-- ════════════════════════════════════════
+local sg = Instance.new("ScreenGui")
+sg.Name           = "NiCH_HUB_Template"
+sg.ResetOnSpawn   = false
+sg.IgnoreGuiInset = true
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.DisplayOrder   = 1000
+sg.Parent         = player.PlayerGui
+
+-- ════════════════════════════════════════
+--  TOAST SYSTEM
+-- ════════════════════════════════════════
+local toastQueue = {}
+local toastActive = false
+
+local toastFrame = Instance.new("Frame")
+toastFrame.Size             = UDim2.new(0, 260, 0, 0)
+toastFrame.AutomaticSize    = Enum.AutomaticSize.Y
+toastFrame.Position         = UDim2.new(1, -276, 0, 16)
+toastFrame.BackgroundTransparency = 1
+toastFrame.BorderSizePixel  = 0
+toastFrame.ZIndex           = 200
+toastFrame.Parent           = sg
+mkList(toastFrame, 8)
+
+local function showToast(ntype, title, msg, duration)
+    duration = duration or 3.5
+
+    local bgCol = {
+        info    = isDark and Color3.fromRGB(28,22,50)  or Color3.fromRGB(230,225,255),
+        success = isDark and Color3.fromRGB(15,40,25)  or Color3.fromRGB(220,255,235),
+        warn    = isDark and Color3.fromRGB(45,38,10)  or Color3.fromRGB(255,248,215),
+        error   = isDark and Color3.fromRGB(50,18,30)  or Color3.fromRGB(255,225,235),
+    }
+    local dotCol = {
+        info=C.ACCENT, success=C.SUCCESS, warn=C.WARN, error=C.ERROR
+    }
+    local borderCol = {
+        info    = isDark and Color3.fromRGB(80,55,140)  or Color3.fromRGB(180,160,240),
+        success = isDark and Color3.fromRGB(40,110,60)  or Color3.fromRGB(100,200,140),
+        warn    = isDark and Color3.fromRGB(120,100,20) or Color3.fromRGB(200,170,50),
+        error   = isDark and Color3.fromRGB(130,50,80)  or Color3.fromRGB(220,100,140),
+    }
+
+    local toast = Instance.new("Frame")
+    toast.Size             = UDim2.new(1, 0, 0, 0)
+    toast.AutomaticSize    = Enum.AutomaticSize.Y
+    toast.BackgroundColor3 = bgCol[ntype] or C.ELEVATED
+    toast.BorderSizePixel  = 0
+    toast.ZIndex           = 201
+    toast.AnchorPoint      = Vector2.new(1, 0)
+    toast.Position         = UDim2.new(1, 60, 0, 0)
+    toast.Parent           = toastFrame
+    mkCorner(toast, 12)
+    mkStroke(toast, borderCol[ntype] or C.BORDER, 1)
+    mkPad(toast, 12, 10)
+
+    local innerRow = Instance.new("Frame")
+    innerRow.Size             = UDim2.new(1,0,0,0)
+    innerRow.AutomaticSize    = Enum.AutomaticSize.Y
+    innerRow.BackgroundTransparency = 1
+    innerRow.ZIndex           = 202
+    innerRow.Parent           = toast
+    mkList(innerRow, 4)
+
+    local titleLb = Instance.new("TextLabel")
+    titleLb.Text             = title
+    titleLb.Size             = UDim2.new(1,0,0,16)
+    titleLb.BackgroundTransparency = 1
+    titleLb.TextColor3       = C.TEXT
+    titleLb.Font             = Enum.Font.GothamBold
+    titleLb.TextSize         = 11
+    titleLb.TextXAlignment   = Enum.TextXAlignment.Left
+    titleLb.ZIndex           = 202
+    titleLb.Parent           = innerRow
+
+    local msgLb = Instance.new("TextLabel")
+    msgLb.Text               = msg
+    msgLb.Size               = UDim2.new(1,0,0,0)
+    msgLb.AutomaticSize      = Enum.AutomaticSize.Y
+    msgLb.BackgroundTransparency = 1
+    msgLb.TextColor3         = C.TEXT_MUTED
+    msgLb.Font               = Enum.Font.Gotham
+    msgLb.TextSize           = 10
+    msgLb.TextXAlignment     = Enum.TextXAlignment.Left
+    msgLb.TextWrapped        = true
+    msgLb.ZIndex             = 202
+    msgLb.Parent             = innerRow
+
+    -- Dot aksen kiri (garis vertikal tipis)
+    local accentBar = Instance.new("Frame")
+    accentBar.Size            = UDim2.new(0, 3, 1, -20)
+    accentBar.Position        = UDim2.new(0, -12, 0, 10)
+    accentBar.BackgroundColor3 = dotCol[ntype] or C.ACCENT
+    accentBar.BorderSizePixel = 0
+    accentBar.ZIndex          = 202
+    accentBar.Parent          = toast
+    mkCorner(accentBar, 2)
+
+    -- Slide in
+    tw(toast, {Position = UDim2.new(1, 0, 0, 0)}, 0.25, Enum.EasingStyle.Back)
+
+    task.delay(duration, function()
+        if toast and toast.Parent then
+            tw(toast, {Position = UDim2.new(1, 60, 0, 0), BackgroundTransparency = 1}, 0.2)
+            task.delay(0.22, function()
+                if toast and toast.Parent then toast:Destroy() end
+            end)
+        end
+    end)
+end
+
+-- ════════════════════════════════════════
+--  FAB (muncul saat minimize)
+-- ════════════════════════════════════════
+local FAB_SIZE = 46
+
+local fab = Instance.new("TextButton")
+fab.Size             = UDim2.new(0, FAB_SIZE, 0, FAB_SIZE)
+fab.Position         = UDim2.new(1, -(FAB_SIZE + 16), 0.5, -FAB_SIZE/2)
+fab.BackgroundColor3 = C.ACCENT
+fab.Text             = "☰"
+fab.TextColor3       = C.WHITE
+fab.Font             = Enum.Font.GothamBold
+fab.TextSize         = 20
+fab.BorderSizePixel  = 0
+fab.ZIndex           = 100
+fab.Visible          = false
+fab.Parent           = sg
+mkCorner(fab, FAB_SIZE/2)
+mkStroke(fab, C.ACCENT2, 2)
+
+-- FAB draggable (handler sendiri, terpisah dari window drag)
+local fabDrag, fabDragStart, fabStartPos = false, nil, nil
+local fabMoved = false
+
+fab.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        fabDrag     = true
+        fabMoved    = false
+        fabDragStart = inp.Position
+        fabStartPos  = fab.Position
+    end
+end)
+fab.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1
+    or inp.UserInputType == Enum.UserInputType.Touch then
+        fabDrag = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(inp)
+    if not fabDrag then return end
+    if inp.UserInputType ~= Enum.UserInputType.MouseMovement
+    and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+    local delta = inp.Position - fabDragStart
+    if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then
+        fabMoved = true
+    end
+    fab.Position = UDim2.new(
+        fabStartPos.X.Scale, fabStartPos.X.Offset + delta.X,
+        fabStartPos.Y.Scale, fabStartPos.Y.Offset + delta.Y
+    )
+end)
+
+-- ════════════════════════════════════════
+--  WINDOW UTAMA
+-- ════════════════════════════════════════
+-- Padding tepi: window tidak penuh layar
+local SCREEN_PAD    = 18  -- jarak ke tepi layar kiri/kanan
+local MARGIN_TB     = 36  -- jarak ke tepi layar atas/bawah
+local WIN_W_MAX     = 680
+
+local function calcWinH()
+    local vp = workspace.CurrentCamera.ViewportSize
+    return math.min(470, vp.Y - MARGIN_TB * 2)
+end
+local WIN_H_MAX = calcWinH()
+
+-- Ukuran window adaptif: pakai skala dengan max size + padding
+local win = Instance.new("Frame")
+win.Size             = UDim2.new(1, -(SCREEN_PAD * 2), 0, 0)
+win.AutomaticSize    = Enum.AutomaticSize.None
+win.SizeConstraint   = Enum.SizeConstraint.RelativeXY
+win.Position         = UDim2.new(0, SCREEN_PAD, 0.5, -WIN_H_MAX/2)
+win.BackgroundColor3 = C.BG
+win.BorderSizePixel  = 0
+win.ZIndex           = 10
+win.ClipsDescendants = true
+win.Parent           = sg
+mkCorner(win, 18)
+mkStroke(win, C.BORDER_HI, 1.5)
+addTheme(win, "BackgroundColor3", DARK.BG, LIGHT.BG)
+
+-- State minimize (harus dideklarasi sebelum centerWindow)
+local minimized = false
+
+-- Batasi lebar max
+local winSizeConstraint = Instance.new("UISizeConstraint")
+winSizeConstraint.MaxSize = Vector2.new(WIN_W_MAX, WIN_H_MAX)
+winSizeConstraint.MinSize = Vector2.new(280, 200)
+winSizeConstraint.Parent  = win
+
+-- Set tinggi manual (AutomaticSize tidak bisa dipakai dengan ClipsDescendants)
+win.Size = UDim2.new(1, -(SCREEN_PAD*2), 0, WIN_H_MAX)
+
+-- Center + resize dinamis sesuai layar (orientasi portrait/landscape)
+local function centerWindow()
+    local vp = workspace.CurrentCamera.ViewportSize
+    local winW = math.min(vp.X - SCREEN_PAD * 2, WIN_W_MAX)
+    WIN_H_MAX = calcWinH()
+    -- Update size constraint agar tidak melebihi layar
+    winSizeConstraint.MaxSize = Vector2.new(WIN_W_MAX, WIN_H_MAX)
+    if not minimized then
+        win.Size = UDim2.new(1, -(SCREEN_PAD * 2), 0, WIN_H_MAX)
+    end
+    win.Position = UDim2.new(0.5, -winW / 2, 0.5, -WIN_H_MAX / 2)
+end
+centerWindow()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(centerWindow)
+
+-- ── TITLE BAR ──
+local titleBar = Instance.new("Frame")
+titleBar.Size             = UDim2.new(1, 0, 0, 46)
+titleBar.BackgroundColor3 = C.SURFACE
+titleBar.BorderSizePixel  = 0
+titleBar.ZIndex           = 11
+titleBar.Parent           = win
+mkCorner(titleBar, 18)
+addTheme(titleBar, "BackgroundColor3", DARK.SURFACE, LIGHT.SURFACE)
+
+local tbMask = Instance.new("Frame")
+tbMask.Size             = UDim2.new(1, 0, 0, 18)
+tbMask.Position         = UDim2.new(0, 0, 1, -18)
+tbMask.BackgroundColor3 = C.SURFACE
+tbMask.BorderSizePixel  = 0
+tbMask.ZIndex           = 11
+tbMask.Parent           = titleBar
+addTheme(tbMask, "BackgroundColor3", DARK.SURFACE, LIGHT.SURFACE)
+
+local titleDot = Instance.new("Frame")
+titleDot.Size             = UDim2.new(0, 6, 0, 6)
+titleDot.Position         = UDim2.new(0, 16, 0.5, -3)
+titleDot.BackgroundColor3 = C.ACCENT
+titleDot.BorderSizePixel  = 0
+titleDot.ZIndex           = 12
+titleDot.Parent           = titleBar
+mkCorner(titleDot, 3)
+addTheme(titleDot, "BackgroundColor3", DARK.ACCENT, LIGHT.ACCENT)
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Text             = "NiCH HUB"
+titleLbl.Size             = UDim2.new(0, 200, 1, 0)
+titleLbl.Position         = UDim2.new(0, 30, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.TextColor3       = C.TEXT
+titleLbl.Font             = Enum.Font.GothamBold
+titleLbl.TextSize         = 14
+titleLbl.TextXAlignment   = Enum.TextXAlignment.Left
+titleLbl.ZIndex           = 12
+titleLbl.Parent           = titleBar
+addTheme(titleLbl, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+
+local verLbl = Instance.new("TextLabel")
+verLbl.Text               = "UI TEMPLATE · v2"
+verLbl.Size               = UDim2.new(0, 200, 0, 12)
+verLbl.Position           = UDim2.new(0, 30, 0, 28)
+verLbl.BackgroundTransparency = 1
+verLbl.TextColor3         = C.ACCENT
+verLbl.Font               = Enum.Font.GothamMedium
+verLbl.TextSize           = 8
+verLbl.TextXAlignment     = Enum.TextXAlignment.Left
+verLbl.ZIndex             = 12
+verLbl.Parent             = titleBar
+addTheme(verLbl, "TextColor3", DARK.ACCENT, LIGHT.ACCENT)
+
+-- Win buttons helper
+local function mkWinBtn(txt, posX)
+    local b = Instance.new("TextButton")
+    b.Size             = UDim2.new(0, 28, 0, 28)
+    b.Position         = UDim2.new(1, posX, 0.5, -14)
+    b.BackgroundColor3 = C.ELEVATED
+    b.TextColor3       = C.TEXT_MUTED
+    b.Text             = txt
+    b.Font             = Enum.Font.GothamBold
+    b.TextSize         = 11
+    b.BorderSizePixel  = 0
+    b.ZIndex           = 12
+    b.Parent           = titleBar
+    mkCorner(b, 8)
+    mkStroke(b, C.BORDER, 1)
+    addTheme(b, "BackgroundColor3", DARK.ELEVATED, LIGHT.ELEVATED)
+    addTheme(b, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+    return b
+end
+
+local btnMinimize = mkWinBtn("−", -76)
+local btnClose    = mkWinBtn("✕", -42)
+
+btnMinimize.MouseEnter:Connect(function()
+    tw(btnMinimize, {BackgroundColor3 = C.ELEVATED, TextColor3 = C.TEXT}, 0.12)
+end)
+btnMinimize.MouseLeave:Connect(function()
+    tw(btnMinimize, {BackgroundColor3 = C.ELEVATED, TextColor3 = C.TEXT_MUTED}, 0.12)
+end)
+btnClose.MouseEnter:Connect(function()
+    tw(btnClose, {BackgroundColor3 = Color3.fromRGB(50,20,30), TextColor3 = C.ERROR}, 0.12)
+end)
+btnClose.MouseLeave:Connect(function()
+    tw(btnClose, {BackgroundColor3 = C.ELEVATED, TextColor3 = C.TEXT_MUTED}, 0.12)
+end)
+
+-- ── BODY ──
+local body = Instance.new("Frame")
+body.Size             = UDim2.new(1, 0, 1, -46)
+body.Position         = UDim2.new(0, 0, 0, 46)
+body.BackgroundTransparency = 1
+body.BorderSizePixel  = 0
+body.ZIndex           = 11
+body.Parent           = win
+
+-- ════════════════════════════════════════
+--  SIDEBAR
+-- ════════════════════════════════════════
+local SIDEBAR_W = 148
+
+local sidebar = Instance.new("Frame")
+sidebar.Size             = UDim2.new(0, SIDEBAR_W, 1, 0)
+sidebar.BackgroundColor3 = C.SURFACE
+sidebar.BorderSizePixel  = 0
+sidebar.ZIndex           = 12
+sidebar.Parent           = body
+addTheme(sidebar, "BackgroundColor3", DARK.SURFACE, LIGHT.SURFACE)
+
+local sideDiv = Instance.new("Frame")
+sideDiv.Size             = UDim2.new(0, 1, 1, 0)
+sideDiv.Position         = UDim2.new(1, -1, 0, 0)
+sideDiv.BackgroundColor3 = C.BORDER
+sideDiv.BorderSizePixel  = 0
+sideDiv.ZIndex           = 13
+sideDiv.Parent           = sidebar
+addTheme(sideDiv, "BackgroundColor3", DARK.BORDER, LIGHT.BORDER)
+
+local sideScroll = Instance.new("ScrollingFrame")
+sideScroll.Size               = UDim2.new(1, 0, 1, 0)
+sideScroll.BackgroundTransparency = 1
+sideScroll.BorderSizePixel    = 0
+sideScroll.ScrollBarThickness = 0
+sideScroll.CanvasSize         = UDim2.new(0,0,0,0)
+sideScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+sideScroll.ZIndex             = 13
+sideScroll.Parent             = sidebar
+mkPad(sideScroll, 8, 10)
+mkList(sideScroll, 4)
+
+-- Tab system
+local activeTab = nil
+local tabPanels = {}
+local tabButtons= {}
+
+local function switchTab(name)
+    for n, panel in pairs(tabPanels) do
+        panel.Visible = (n == name)
+    end
+    for n, btn in pairs(tabButtons) do
+        local stroke = btn:FindFirstChildOfClass("UIStroke")
+        if n == name then
+            tw(btn, {BackgroundColor3 = isDark and Color3.fromRGB(38,28,72) or Color3.fromRGB(220,210,255), TextColor3 = C.ACCENT}, 0.15)
+            if stroke then tw(stroke, {Color = C.ACCENT}, 0.15) end
+        else
+            tw(btn, {BackgroundColor3 = Color3.fromRGB(0,0,0), TextColor3 = C.TEXT_MUTED}, 0.15)
+            btn.BackgroundTransparency = 1
+            if stroke then tw(stroke, {Color = isDark and DARK.BORDER or LIGHT.BORDER}, 0.15) end
+        end
+    end
+    activeTab = name
+end
+
+local function mkTab(name, label, layoutOrder)
+    local btn = Instance.new("TextButton")
+    btn.Size             = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    btn.BackgroundTransparency = 1
+    btn.TextColor3       = C.TEXT_MUTED
+    btn.Text             = label
+    btn.Font             = Enum.Font.GothamMedium
+    btn.TextSize         = 11
+    btn.BorderSizePixel  = 0
+    btn.TextXAlignment   = Enum.TextXAlignment.Left
+    btn.ZIndex           = 14
+    btn.LayoutOrder      = layoutOrder
+    btn.Parent           = sideScroll
+    mkCorner(btn, 10)
+    mkStroke(btn, C.BORDER, 1)
+    mkPad(btn, 12, 0)
+    addTheme(btn, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+    btn.MouseButton1Click:Connect(function() switchTab(name) end)
+    btn.MouseEnter:Connect(function()
+        if activeTab ~= name then
+            tw(btn, {BackgroundColor3 = C.ELEVATED, TextColor3 = C.TEXT}, 0.12)
+            btn.BackgroundTransparency = 0
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if activeTab ~= name then
+            tw(btn, {TextColor3 = C.TEXT_MUTED}, 0.12)
+            btn.BackgroundTransparency = 1
+        end
+    end)
+
+    tabButtons[name] = btn
+    return btn
+end
+
+local function mkSideDivider(order)
+    local d = Instance.new("Frame")
+    d.Size             = UDim2.new(1, 0, 0, 1)
+    d.BackgroundColor3 = C.BORDER
+    d.BorderSizePixel  = 0
+    d.ZIndex           = 13
+    d.LayoutOrder      = order
+    d.Parent           = sideScroll
+    addTheme(d, "BackgroundColor3", DARK.BORDER, LIGHT.BORDER)
+end
+
+mkTab("buttons",      "● Buttons & Badge",  1)
+mkTab("inputs",       "⌨  Input & Form",    2)
+mkTab("toggles",      "◎  Toggle Switch",   3)
+mkTab("dropdown",     "▾  Dropdown",        4)
+mkSideDivider(5)
+mkTab("notif",        "⚑  Notifikasi",      6)
+mkTab("paragraph",    "¶  Teks & Para",     7)
+mkSideDivider(8)
+mkTab("programmatic", "⚡ Programmatic",    9)
+
+-- ════════════════════════════════════════
+--  CONTENT AREA
+-- ════════════════════════════════════════
+local content = Instance.new("ScrollingFrame")
+content.Size               = UDim2.new(1, -SIDEBAR_W, 1, 0)
+content.Position           = UDim2.new(0, SIDEBAR_W, 0, 0)
+content.BackgroundTransparency = 1
+content.BorderSizePixel    = 0
+content.ScrollBarThickness = 3
+content.ScrollBarImageColor3 = C.ACCENT
+content.CanvasSize         = UDim2.new(0,0,0,0)
+content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+content.ZIndex             = 12
+content.Parent             = body
+mkPad(content, 14, 12)
+mkList(content, 14)
+
+-- Helper: panel tab
+local function mkPanel(name)
+    local p = Instance.new("Frame")
+    p.Size             = UDim2.new(1, 0, 0, 0)
+    p.AutomaticSize    = Enum.AutomaticSize.Y
+    p.BackgroundTransparency = 1
+    p.BorderSizePixel  = 0
+    p.ZIndex           = 13
+    p.Visible          = false
+    p.Parent           = content
+    mkList(p, 14)
+    tabPanels[name] = p
+    return p
+end
+
+-- Helper: section card
+local function mkSection(parent, titleText)
+    local card = Instance.new("Frame")
+    card.Size             = UDim2.new(1, 0, 0, 0)
+    card.AutomaticSize    = Enum.AutomaticSize.Y
+    card.BackgroundColor3 = C.SURFACE
+    card.BorderSizePixel  = 0
+    card.ZIndex           = 14
+    card.Parent           = parent
+    mkCorner(card, 12)
+    mkStroke(card, C.BORDER, 1)
+    mkPad(card, 14, 12)
+    mkList(card, 10)
+    addTheme(card, "BackgroundColor3", DARK.SURFACE, LIGHT.SURFACE)
+
+    local hdr = Instance.new("Frame")
+    hdr.Size             = UDim2.new(1, 0, 0, 18)
+    hdr.BackgroundTransparency = 1
+    hdr.ZIndex           = 15
+    hdr.Parent           = card
+
+    local bar = Instance.new("Frame")
+    bar.Size             = UDim2.new(0, 4, 0, 13)
+    bar.Position         = UDim2.new(0, 0, 0.5, -6)
+    bar.BackgroundColor3 = C.ACCENT
+    bar.BorderSizePixel  = 0
+    bar.ZIndex           = 16
+    bar.Parent           = hdr
+    mkCorner(bar, 2)
+    addTheme(bar, "BackgroundColor3", DARK.ACCENT, LIGHT.ACCENT)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Text             = titleText:upper()
+    lbl.Size             = UDim2.new(1, -12, 1, 0)
+    lbl.Position         = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3       = C.ACCENT
+    lbl.Font             = Enum.Font.GothamBold
+    lbl.TextSize         = 9
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.ZIndex           = 16
+    lbl.Parent           = hdr
+    addTheme(lbl, "TextColor3", DARK.ACCENT, LIGHT.ACCENT)
+
+    local div = Instance.new("Frame")
+    div.Size             = UDim2.new(1, 0, 0, 1)
+    div.BackgroundColor3 = C.BORDER
+    div.BorderSizePixel  = 0
+    div.ZIndex           = 15
+    div.Parent           = card
+    addTheme(div, "BackgroundColor3", DARK.BORDER, LIGHT.BORDER)
+
+    return card
+end
+
+-- Helper: label
+local function mkLabel(parent, text, zindex)
+    local l = Instance.new("TextLabel")
+    l.Text               = text
+    l.Size               = UDim2.new(1, 0, 0, 14)
+    l.BackgroundTransparency = 1
+    l.TextColor3         = C.TEXT_MUTED
+    l.Font               = Enum.Font.GothamMedium
+    l.TextSize           = 10
+    l.TextXAlignment     = Enum.TextXAlignment.Left
+    l.ZIndex             = zindex or 16
+    l.Parent             = parent
+    addTheme(l, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+    return l
+end
+
+-- Helper: divider
+local function mkDivider(parent)
+    local d = Instance.new("Frame")
+    d.Size             = UDim2.new(1, 0, 0, 1)
+    d.BackgroundColor3 = C.BORDER
+    d.BorderSizePixel  = 0
+    d.ZIndex           = 15
+    d.Parent           = parent
+    addTheme(d, "BackgroundColor3", DARK.BORDER, LIGHT.BORDER)
+end
+
+-- ════════════════════════════════════════
+--  TAB 1: BUTTONS & BADGE
+-- ════════════════════════════════════════
+local pButtons = mkPanel("buttons")
+
+do
+    local sec = mkSection(pButtons, "Button Variants")
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1,0,0,0)
+    row.AutomaticSize    = Enum.AutomaticSize.Y
+    row.BackgroundTransparency = 1
+    row.ZIndex           = 15
+    row.Parent           = sec
+    mkList(row, 8, Enum.FillDirection.Horizontal)
+
+    local function mkBtn(label, bg, fg)
+        local b = Instance.new("TextButton")
+        b.Size             = UDim2.new(0,0,0,36)
+        b.AutomaticSize    = Enum.AutomaticSize.X
+        b.BackgroundColor3 = bg
+        b.TextColor3       = fg
+        b.Text             = "  "..label.."  "
+        b.Font             = Enum.Font.GothamBold
+        b.TextSize         = 12
+        b.BorderSizePixel  = 0
+        b.ZIndex           = 16
+        b.Parent           = row
+        mkCorner(b, 10)
+        b.MouseEnter:Connect(function() tw(b, {BackgroundColor3 = C.BORDER_HI}, 0.12) end)
+        b.MouseLeave:Connect(function() tw(b, {BackgroundColor3 = bg}, 0.12) end)
+        return b
+    end
+
+    mkBtn("Primary",   C.ACCENT,                      C.WHITE)
+    mkBtn("Secondary", C.ELEVATED,                    C.TEXT)
+    mkBtn("Success",   Color3.fromRGB(30,60,35),      C.SUCCESS)
+    mkBtn("Danger",    Color3.fromRGB(60,20,35),      C.ERROR)
+
+    local sec2 = mkSection(pButtons, "Badge")
+    local rowB = Instance.new("Frame")
+    rowB.Size            = UDim2.new(1,0,0,0)
+    rowB.AutomaticSize   = Enum.AutomaticSize.Y
+    rowB.BackgroundTransparency = 1
+    rowB.ZIndex          = 15
+    rowB.Parent          = sec2
+    mkList(rowB, 8, Enum.FillDirection.Horizontal)
+
+    local function mkBadge(label, bg, fg)
+        local b = Instance.new("TextLabel")
+        b.Size             = UDim2.new(0,0,0,22)
+        b.AutomaticSize    = Enum.AutomaticSize.X
+        b.BackgroundColor3 = bg
+        b.TextColor3       = fg
+        b.Text             = "  "..label.."  "
+        b.Font             = Enum.Font.GothamBold
+        b.TextSize         = 10
+        b.BorderSizePixel  = 0
+        b.ZIndex           = 16
+        b.Parent           = rowB
+        mkCorner(b, 20)
+        return b
+    end
+
+    mkBadge("Active",  Color3.fromRGB(38,28,72),  C.ACCENT)
+    mkBadge("Online",  Color3.fromRGB(20,50,30),  C.SUCCESS)
+    mkBadge("Error",   Color3.fromRGB(60,20,35),  C.ERROR)
+    mkBadge("Warning", Color3.fromRGB(55,45,10),  C.WARN)
+
+    -- Light mode toggle di sini
+    local sec3 = mkSection(pButtons, "Tampilan")
+    local themeRow = Instance.new("Frame")
+    themeRow.Size            = UDim2.new(1,0,0,36)
+    themeRow.BackgroundTransparency = 1
+    themeRow.ZIndex          = 15
+    themeRow.Parent          = sec3
+
+    local themeLbl = Instance.new("TextLabel")
+    themeLbl.Text            = "Light Mode"
+    themeLbl.Size            = UDim2.new(1,-60,1,0)
+    themeLbl.BackgroundTransparency = 1
+    themeLbl.TextColor3      = C.TEXT
+    themeLbl.Font            = Enum.Font.GothamMedium
+    themeLbl.TextSize        = 12
+    themeLbl.TextXAlignment  = Enum.TextXAlignment.Left
+    themeLbl.ZIndex          = 16
+    themeLbl.Parent          = themeRow
+    addTheme(themeLbl, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+
+    local themeTrack = Instance.new("TextButton")
+    themeTrack.Size          = UDim2.new(0,44,0,24)
+    themeTrack.Position      = UDim2.new(1,-46,0.5,-12)
+    themeTrack.BackgroundColor3 = C.ELEVATED
+    themeTrack.Text          = ""
+    themeTrack.BorderSizePixel = 0
+    themeTrack.ZIndex        = 16
+    themeTrack.Parent        = themeRow
+    mkCorner(themeTrack, 12)
+    mkStroke(themeTrack, C.BORDER, 1)
+
+    local themeThumb = Instance.new("Frame")
+    themeThumb.Size          = UDim2.new(0,16,0,16)
+    themeThumb.Position      = UDim2.new(0,3,0.5,-8)
+    themeThumb.BackgroundColor3 = C.TEXT_MUTED
+    themeThumb.BorderSizePixel = 0
+    themeThumb.ZIndex        = 17
+    themeThumb.Parent        = themeTrack
+    mkCorner(themeThumb, 8)
+
+    themeTrack.MouseButton1Click:Connect(function()
+        isDark = not isDark
+        applyTheme()
+        -- update stroke warna window
+        local winS = win:FindFirstChildOfClass("UIStroke")
+        if winS then winS.Color = C.BORDER_HI end
+        if isDark then
+            tw(themeTrack, {BackgroundColor3 = C.ELEVATED}, 0.18)
+            tw(themeThumb, {Position = UDim2.new(0,3,0.5,-8), BackgroundColor3 = C.TEXT_MUTED}, 0.18)
+        else
+            tw(themeTrack, {BackgroundColor3 = Color3.fromRGB(200,185,255)}, 0.18)
+            tw(themeThumb, {Position = UDim2.new(0,20,0.5,-8), BackgroundColor3 = C.ACCENT}, 0.18)
+        end
+        showToast("info", "Tema Diubah", isDark and "Dark mode aktif" or "Light mode aktif")
+    end)
+end
+
+-- ════════════════════════════════════════
+--  TAB 2: INPUT & FORM
+-- ════════════════════════════════════════
+local pInputs = mkPanel("inputs")
+local inputRefs = {}
+
+local function mkInputField(parent, placeholder, isNumber)
+    local inp = Instance.new("TextBox")
+    inp.Size             = UDim2.new(0, 160, 0, 34)
+    inp.BackgroundColor3 = C.ELEVATED
+    inp.TextColor3       = C.TEXT
+    inp.PlaceholderText  = placeholder or ""
+    inp.PlaceholderColor3 = C.TEXT_MUTED
+    inp.Text             = ""
+    inp.Font             = isNumber and Enum.Font.GothamBold or Enum.Font.GothamMedium
+    inp.TextSize         = 12
+    inp.BorderSizePixel  = 0
+    inp.ClearTextOnFocus = false
+    inp.ZIndex           = 16
+    inp.Parent           = parent
+    mkCorner(inp, 8)
+    local stroke = mkStroke(inp, C.BORDER, 1)
+    mkPad(inp, 10, 0)
+    addTheme(inp, "BackgroundColor3", DARK.ELEVATED, LIGHT.ELEVATED)
+    addTheme(inp, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+    inp.Focused:Connect(function() tw(stroke, {Color = C.ACCENT}, 0.15) end)
+    inp.FocusLost:Connect(function() tw(stroke, {Color = C.BORDER}, 0.15) end)
+    return inp
+end
+
+-- Helper: baris form label kiri + input kanan
+local function mkFormRow(parent, labelText, placeholder, isNumber, defaultVal)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, 0, 0, 38)
+    row.BackgroundTransparency = 1
+    row.ZIndex           = 15
+    row.Parent           = parent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Text             = labelText
+    lbl.Size             = UDim2.new(1, -170, 1, 0)
+    lbl.Position         = UDim2.new(0, 0, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3       = C.TEXT
+    lbl.Font             = Enum.Font.GothamMedium
+    lbl.TextSize         = 12
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+    lbl.TextTruncate     = Enum.TextTruncate.AtEnd
+    lbl.ZIndex           = 16
+    lbl.Parent           = row
+    addTheme(lbl, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+
+    local inp = mkInputField(row, placeholder, isNumber)
+    inp.Position         = UDim2.new(1, -162, 0.5, -17)
+    if defaultVal then inp.Text = tostring(defaultVal) end
+
+    return row, inp
+end
+
+do
+    local sec = mkSection(pInputs, "Form Input")
+
+    local r1, i1 = mkFormRow(sec, "Top Delay",    "detik", true,  "0.5")
+    local r2, i2 = mkFormRow(sec, "Bottom Delay", "detik", true,  "0.5")
+
+    inputRefs.topDelay    = i1
+    inputRefs.bottomDelay = i2
+
+    mkDivider(sec)
+
+    -- Submit button
+    local submitBtn = Instance.new("TextButton")
+    submitBtn.Size             = UDim2.new(1, 0, 0, 38)
+    submitBtn.BackgroundColor3 = C.ACCENT
+    submitBtn.TextColor3       = C.WHITE
+    submitBtn.Text             = "Submit"
+    submitBtn.Font             = Enum.Font.GothamBold
+    submitBtn.TextSize         = 13
+    submitBtn.BorderSizePixel  = 0
+    submitBtn.ZIndex           = 16
+    submitBtn.Parent           = sec
+    mkCorner(submitBtn, 10)
+
+    submitBtn.MouseEnter:Connect(function()
+        tw(submitBtn, {BackgroundColor3 = C.ACCENT2}, 0.12)
+    end)
+    submitBtn.MouseLeave:Connect(function()
+        tw(submitBtn, {BackgroundColor3 = C.ACCENT}, 0.12)
+    end)
+    submitBtn.MouseButton1Click:Connect(function()
+        local td = inputRefs.topDelay.Text
+        local bd = inputRefs.bottomDelay.Text
+        showToast("success", "Form Submitted",
+            "Top: " .. (td ~= "" and td or "—") ..
+            "s  |  Bottom: " .. (bd ~= "" and bd or "—") .. "s")
+    end)
+
+    -- Input lainnya
+    local sec2 = mkSection(pInputs, "Input Lainnya")
+    local _, iName = mkFormRow(sec2, "Nama Karakter", "masukkan nama...", false)
+    local _, iSpeed= mkFormRow(sec2, "Walk Speed",    "default: 16", true, "16")
+    local _, iUrl  = mkFormRow(sec2, "URL Map",       "https://...", false)
+    inputRefs.name  = iName
+    inputRefs.speed = iSpeed
+    inputRefs.url   = iUrl
+end
+
+-- ════════════════════════════════════════
+--  TAB 3: TOGGLE SWITCH
+-- ════════════════════════════════════════
+local pToggles = mkPanel("toggles")
+local toggleStates = {}
+
+local function setToggle(id, state)
+    local d = toggleStates[id]
+    if not d then return end
+    d.value = state
+    if state then
+        tw(d.track, {BackgroundColor3 = Color3.fromRGB(38,28,72)}, 0.18)
+        local s = d.track:FindFirstChildOfClass("UIStroke")
+        if s then tw(s, {Color = C.ACCENT}, 0.18) end
+        tw(d.thumb, {Position = UDim2.new(0,20,0.5,-8), BackgroundColor3 = C.ACCENT}, 0.18)
+        d.valLbl.Text = "ON"; d.valLbl.TextColor3 = C.ACCENT
+    else
+        tw(d.track, {BackgroundColor3 = C.ELEVATED}, 0.18)
+        local s = d.track:FindFirstChildOfClass("UIStroke")
+        if s then tw(s, {Color = C.BORDER}, 0.18) end
+        tw(d.thumb, {Position = UDim2.new(0,3,0.5,-8), BackgroundColor3 = C.TEXT_MUTED}, 0.18)
+        d.valLbl.Text = "OFF"; d.valLbl.TextColor3 = C.TEXT_MUTED
+    end
+    if d.callback then d.callback(state) end
+end
+
+local function getToggle(id)
+    return toggleStates[id] and toggleStates[id].value or false
+end
+
+local function mkToggleRow(parent, id, labelTxt, subTxt, defaultOn, cb)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, 0, 0, 46)
+    row.BackgroundTransparency = 1
+    row.ZIndex           = 15
+    row.Parent           = parent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Text = labelTxt; lbl.Size = UDim2.new(1,-95,0,18)
+    lbl.Position = UDim2.new(0,0,0,4)
+    lbl.BackgroundTransparency=1; lbl.TextColor3=C.TEXT
+    lbl.Font=Enum.Font.GothamMedium; lbl.TextSize=12
+    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=16; lbl.Parent=row
+    addTheme(lbl, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+
+    local sub = Instance.new("TextLabel")
+    sub.Text=subTxt; sub.Size=UDim2.new(1,-95,0,14)
+    sub.Position=UDim2.new(0,0,0,24)
+    sub.BackgroundTransparency=1; sub.TextColor3=C.TEXT_MUTED
+    sub.Font=Enum.Font.Gotham; sub.TextSize=9
+    sub.TextXAlignment=Enum.TextXAlignment.Left; sub.ZIndex=16; sub.Parent=row
+    addTheme(sub, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+    local valLbl = Instance.new("TextLabel")
+    valLbl.Text=defaultOn and "ON" or "OFF"
+    valLbl.Size=UDim2.new(0,28,1,0); valLbl.Position=UDim2.new(1,-84,0,0)
+    valLbl.BackgroundTransparency=1
+    valLbl.TextColor3=defaultOn and C.ACCENT or C.TEXT_MUTED
+    valLbl.Font=Enum.Font.GothamBold; valLbl.TextSize=10
+    valLbl.ZIndex=16; valLbl.Parent=row
+
+    local track = Instance.new("TextButton")
+    track.Size=UDim2.new(0,44,0,24); track.Position=UDim2.new(1,-46,0.5,-12)
+    track.BackgroundColor3=defaultOn and Color3.fromRGB(38,28,72) or C.ELEVATED
+    track.Text=""; track.BorderSizePixel=0; track.ZIndex=16; track.Parent=row
+    mkCorner(track, 12)
+    mkStroke(track, defaultOn and C.ACCENT or C.BORDER, 1)
+
+    local thumb = Instance.new("Frame")
+    thumb.Size=UDim2.new(0,16,0,16)
+    thumb.Position=defaultOn and UDim2.new(0,20,0.5,-8) or UDim2.new(0,3,0.5,-8)
+    thumb.BackgroundColor3=defaultOn and C.ACCENT or C.TEXT_MUTED
+    thumb.BorderSizePixel=0; thumb.ZIndex=17; thumb.Parent=track
+    mkCorner(thumb, 8)
+
+    toggleStates[id] = {value=defaultOn or false, track=track, thumb=thumb, valLbl=valLbl, callback=cb}
+    track.MouseButton1Click:Connect(function() setToggle(id, not toggleStates[id].value) end)
+end
+
+do
+    local sec = mkSection(pToggles, "Toggle Switch")
+    mkToggleRow(sec, "autoPlay",   "Auto Playback",     "Mulai otomatis saat data dimuat", false)
+    mkDivider(sec)
+    mkToggleRow(sec, "groundSnap", "Ground Snap",       "Snap karakter ke permukaan tanah", true)
+    mkDivider(sec)
+    mkToggleRow(sec, "earlyJump",  "Early Jump Detect", "Deteksi lompat lebih awal dari state", true)
+    mkDivider(sec)
+    mkToggleRow(sec, "vertDetect", "Vertical Detection","Deteksi gerakan vertikal (manjat)", true)
+end
+
+-- ════════════════════════════════════════
+--  TAB 4: DROPDOWN
+-- ════════════════════════════════════════
+local pDropdown = mkPanel("dropdown")
+local dropItems = {}
+local dropOpen  = false
+local dropOnSelect = nil
+
+do
+    local MAP_LIST = {
+        {Name="AETHERIA EVENT",    Url="https://storage.dimszyhub.my.id/json/aetheria_event.json"},
+        {Name="MOUNT BEJIRLAH",    Url="https://storage.dimszyhub.my.id/json/mount_bejirlah.json"},
+        {Name="MOUNT YAHAYUK",     Url="https://storage.dimszyhub.my.id/json/mount_yahayuk.json"},
+        {Name="MOUNT YAHAYUK VIP", Url="https://storage.dimszyhub.my.id/json/mount_yahayuk_vip.json"},
+        {Name="MOUNT VALHERA",     Url="https://storage.dimszyhub.my.id/json/mount_valhera.json"},
+        {Name="MOUNT VELVET",      Url="https://storage.dimszyhub.my.id/json/mount_velvet.json"},
+        {Name="MOUNT NOXERA",      Url="https://storage.dimszyhub.my.id/json/mount_noxera.json"},
+        {Name="MOUNT COCO",        Url="https://storage.dimszyhub.my.id/json/mount_coco.json"},
+        {Name="OBSTACLE SKYLINE",  Url="https://storage.dimszyhub.my.id/json/obstacle_skyline.json"},
+        {Name="KING OBSTACLE",     Url="https://storage.dimszyhub.my.id/json/king_obstacle.json"},
+        {Name="MOUNT ETHEREAL",    Url="https://storage.dimszyhub.my.id/json/mount_ethereal.json"},
+        {Name="MOUNT DORAGON",     Url="https://storage.dimszyhub.my.id/json/mount_doragon.json"},
+    }
+
+    local sec = mkSection(pDropdown, "Dropdown dengan Pencarian")
+    mkLabel(sec, "Pilih Map")
+
+    local dropBtn = Instance.new("TextButton")
+    dropBtn.Size             = UDim2.new(1,0,0,38)
+    dropBtn.BackgroundColor3 = C.ELEVATED
+    dropBtn.TextColor3       = C.TEXT_MUTED
+    dropBtn.Text             = "Pilih Map  ▾"
+    dropBtn.Font             = Enum.Font.GothamMedium
+    dropBtn.TextSize         = 12
+    dropBtn.BorderSizePixel  = 0
+    dropBtn.TextXAlignment   = Enum.TextXAlignment.Left
+    dropBtn.ZIndex           = 16
+    dropBtn.Parent           = sec
+    mkCorner(dropBtn, 10)
+    mkStroke(dropBtn, C.BORDER, 1)
+    mkPad(dropBtn, 12, 0)
+    addTheme(dropBtn, "BackgroundColor3", DARK.ELEVATED, LIGHT.ELEVATED)
+    addTheme(dropBtn, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+    local dropPanel = Instance.new("Frame")
+    dropPanel.Size            = UDim2.new(1,0,0,0)
+    dropPanel.BackgroundColor3= C.ELEVATED
+    dropPanel.ClipsDescendants= true
+    dropPanel.BorderSizePixel = 0
+    dropPanel.ZIndex          = 20
+    dropPanel.Visible         = false
+    dropPanel.Parent          = sec
+    mkCorner(dropPanel, 10)
+    mkStroke(dropPanel, C.BORDER_HI, 1)
+    addTheme(dropPanel, "BackgroundColor3", DARK.ELEVATED, LIGHT.ELEVATED)
+
+    local searchBox = Instance.new("TextBox")
+    searchBox.Size            = UDim2.new(1,0,0,34)
+    searchBox.BackgroundColor3= C.SURFACE
+    searchBox.TextColor3      = C.TEXT
+    searchBox.PlaceholderText = "🔍 Cari map..."
+    searchBox.PlaceholderColor3 = C.TEXT_MUTED
+    searchBox.Text            = ""
+    searchBox.Font            = Enum.Font.GothamMedium
+    searchBox.TextSize        = 11
+    searchBox.BorderSizePixel = 0
+    searchBox.ClearTextOnFocus= false
+    searchBox.ZIndex          = 21
+    searchBox.Parent          = dropPanel
+    mkPad(searchBox, 12, 0)
+    addTheme(searchBox, "BackgroundColor3", DARK.SURFACE, LIGHT.SURFACE)
+    addTheme(searchBox, "TextColor3", DARK.TEXT, LIGHT.TEXT)
+
+    local searchDiv = Instance.new("Frame")
+    searchDiv.Size=UDim2.new(1,0,0,1); searchDiv.Position=UDim2.new(0,0,0,34)
+    searchDiv.BackgroundColor3=C.BORDER; searchDiv.BorderSizePixel=0
+    searchDiv.ZIndex=21; searchDiv.Parent=dropPanel
+    addTheme(searchDiv, "BackgroundColor3", DARK.BORDER, LIGHT.BORDER)
+
+    local dropScroll = Instance.new("ScrollingFrame")
+    dropScroll.Size=UDim2.new(1,0,1,-36); dropScroll.Position=UDim2.new(0,0,0,36)
+    dropScroll.BackgroundTransparency=1; dropScroll.BorderSizePixel=0
+    dropScroll.ScrollBarThickness=2; dropScroll.ScrollBarImageColor3=C.ACCENT
+    dropScroll.CanvasSize=UDim2.new(0,0,0,0)
+    dropScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    dropScroll.ZIndex=21; dropScroll.Parent=dropPanel
+    mkPad(dropScroll, 6, 4); mkList(dropScroll, 2)
+
+    local function filterList(q)
+        q = q:lower()
+        for _, item in ipairs(dropItems) do
+            item.btn.Visible = q=="" or item.name:find(q,1,true)~=nil
+        end
+    end
+
+    for _, map in ipairs(MAP_LIST) do
+        local opt = Instance.new("TextButton")
+        opt.Size=UDim2.new(1,0,0,32); opt.BackgroundColor3=C.ELEVATED
+        opt.TextColor3=C.TEXT_MUTED; opt.Text=map.Name
+        opt.Font=Enum.Font.GothamMedium; opt.TextSize=11
+        opt.BorderSizePixel=0; opt.ZIndex=22; opt.Parent=dropScroll
+        mkCorner(opt, 6)
+        addTheme(opt, "BackgroundColor3", DARK.ELEVATED, LIGHT.ELEVATED)
+        addTheme(opt, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+        opt.MouseEnter:Connect(function()
+            tw(opt, {BackgroundColor3=Color3.fromRGB(50,38,90), TextColor3=C.TEXT}, 0.1)
+        end)
+        opt.MouseLeave:Connect(function()
+            tw(opt, {BackgroundColor3=C.ELEVATED, TextColor3=C.TEXT_MUTED}, 0.1)
+        end)
+        opt.MouseButton1Click:Connect(function()
+            dropBtn.Text = map.Name.."  ▾"
+            tw(dropBtn, {BackgroundColor3=Color3.fromRGB(38,28,72), TextColor3=C.ACCENT2}, 0.15)
+            dropPanel.Visible=false; dropPanel.Size=UDim2.new(1,0,0,0)
+            dropOpen=false; searchBox.Text=""
+            showToast("info", "Map Dipilih", map.Name)
+            if dropOnSelect then dropOnSelect(map.Name, map.Url) end
+        end)
+        table.insert(dropItems, {btn=opt, name=map.Name:lower()})
+    end
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function() filterList(searchBox.Text) end)
+
+    dropBtn.MouseButton1Click:Connect(function()
+        if dropOpen then
+            dropOpen=false; dropPanel.Visible=false; dropPanel.Size=UDim2.new(1,0,0,0)
+        else
+            dropOpen=true; searchBox.Text=""; filterList("")
+            dropPanel.Visible=true; dropPanel.Size=UDim2.new(1,0,0,170)
+        end
+    end)
+end
+
+-- ════════════════════════════════════════
+--  TAB 5: NOTIFIKASI
+-- ════════════════════════════════════════
+local pNotif = mkPanel("notif")
+local notifDynSec
+
+local function mkNotifCard(parent, ntype, title, msg)
+    local bgCol = {info=Color3.fromRGB(28,22,50),success=Color3.fromRGB(15,40,25),warn=Color3.fromRGB(45,38,10),error=Color3.fromRGB(50,18,30)}
+    local dotCol = {info=C.ACCENT,success=C.SUCCESS,warn=C.WARN,error=C.ERROR}
+    local borderCol = {info=Color3.fromRGB(80,55,140),success=Color3.fromRGB(40,110,60),warn=Color3.fromRGB(120,100,20),error=Color3.fromRGB(130,50,80)}
+
+    local card = Instance.new("Frame")
+    card.Size=UDim2.new(1,0,0,0); card.AutomaticSize=Enum.AutomaticSize.Y
+    card.BackgroundColor3=bgCol[ntype] or C.ELEVATED; card.BorderSizePixel=0
+    card.ZIndex=16; card.Parent=parent
+    mkCorner(card, 10); mkStroke(card, borderCol[ntype] or C.BORDER, 1)
+    mkPad(card, 12, 10); mkList(card, 4)
+
+    local accentBar = Instance.new("Frame")
+    accentBar.Size=UDim2.new(0,3,1,-20); accentBar.Position=UDim2.new(0,-12,0,10)
+    accentBar.BackgroundColor3=dotCol[ntype] or C.ACCENT
+    accentBar.BorderSizePixel=0; accentBar.ZIndex=17; accentBar.Parent=card
+    mkCorner(accentBar, 2)
+
+    local titleLb = Instance.new("TextLabel")
+    titleLb.Text=title; titleLb.Size=UDim2.new(1,0,0,16)
+    titleLb.BackgroundTransparency=1; titleLb.TextColor3=C.TEXT
+    titleLb.Font=Enum.Font.GothamBold; titleLb.TextSize=11
+    titleLb.TextXAlignment=Enum.TextXAlignment.Left; titleLb.ZIndex=17; titleLb.Parent=card
+
+    local msgLb = Instance.new("TextLabel")
+    msgLb.Text=msg; msgLb.Size=UDim2.new(1,0,0,0)
+    msgLb.AutomaticSize=Enum.AutomaticSize.Y
+    msgLb.BackgroundTransparency=1; msgLb.TextColor3=C.TEXT_MUTED
+    msgLb.Font=Enum.Font.Gotham; msgLb.TextSize=10
+    msgLb.TextXAlignment=Enum.TextXAlignment.Left
+    msgLb.TextWrapped=true; msgLb.ZIndex=17; msgLb.Parent=card
+    return card
+end
+
+do
+    local sec = mkSection(pNotif, "Notifikasi Statis")
+    mkNotifCard(sec, "info",    "Info",       "Data berhasil dimuat. Tersedia 3.420 titik rekaman.")
+    mkNotifCard(sec, "success", "Sukses",     "Playback selesai. Karakter sudah di posisi akhir.")
+    mkNotifCard(sec, "warn",    "Peringatan", "Offset terlalu rendah, karakter mungkin terbenam.")
+    mkNotifCard(sec, "error",   "Error",      "HTTP request gagal. Cek koneksi atau URL map.")
+
+    local sec2 = mkSection(pNotif, "Toast Notification")
+    local row = Instance.new("Frame")
+    row.Size=UDim2.new(1,0,0,0); row.AutomaticSize=Enum.AutomaticSize.Y
+    row.BackgroundTransparency=1; row.ZIndex=15; row.Parent=sec2
+    mkList(row, 6, Enum.FillDirection.Horizontal)
+
+    local function mkSmallBtn(label, bg, fg, cb)
+        local b = Instance.new("TextButton")
+        b.Size=UDim2.new(0,0,0,30); b.AutomaticSize=Enum.AutomaticSize.X
+        b.BackgroundColor3=bg; b.TextColor3=fg
+        b.Text="  "..label.."  "; b.Font=Enum.Font.GothamBold; b.TextSize=10
+        b.BorderSizePixel=0; b.ZIndex=16; b.Parent=row
+        mkCorner(b, 8); b.MouseButton1Click:Connect(cb)
+        return b
+    end
+
+    mkSmallBtn("Info",    C.ELEVATED,                    C.ACCENT,   function() showToast("info",    "Info",    "Ini notifikasi info.") end)
+    mkSmallBtn("Sukses",  Color3.fromRGB(20,45,28),      C.SUCCESS,  function() showToast("success", "Sukses",  "Operasi berhasil!") end)
+    mkSmallBtn("Warning", Color3.fromRGB(45,38,10),      C.WARN,     function() showToast("warn",    "Warning", "Perhatikan pengaturan ini.") end)
+    mkSmallBtn("Error",   Color3.fromRGB(50,18,30),      C.ERROR,    function() showToast("error",   "Error",   "Terjadi kesalahan.") end)
+
+    notifDynSec = mkSection(pNotif, "Notifikasi Dinamis")
+    local row2 = Instance.new("Frame")
+    row2.Size=UDim2.new(1,0,0,0); row2.AutomaticSize=Enum.AutomaticSize.Y
+    row2.BackgroundTransparency=1; row2.ZIndex=15; row2.Parent=notifDynSec
+    mkList(row2, 6, Enum.FillDirection.Horizontal)
+
+    mkSmallBtn("+ Info",    C.ELEVATED, C.ACCENT, function() mkNotifCard(notifDynSec,"info","Info Baru","Notifikasi info ditambahkan secara dinamis.") end)
+    mkSmallBtn("+ Sukses",  Color3.fromRGB(20,45,28), C.SUCCESS, function() mkNotifCard(notifDynSec,"success","Berhasil","Operasi selesai.") end)
+    mkSmallBtn("+ Warning", Color3.fromRGB(45,38,10), C.WARN, function() mkNotifCard(notifDynSec,"warn","Perhatian","Ada yang perlu diperhatikan.") end)
+    mkSmallBtn("+ Error",   Color3.fromRGB(50,18,30), C.ERROR, function() mkNotifCard(notifDynSec,"error","Error","Gagal menjalankan operasi.") end)
+end
+
+-- ════════════════════════════════════════
+--  TAB 6: TEKS & PARAGRAPH
+-- ════════════════════════════════════════
+local pParagraph = mkPanel("paragraph")
+local paraRefs = {}
+
+do
+    local sec = mkSection(pParagraph, "Paragraph")
+    local p1 = Instance.new("TextLabel")
+    p1.Text="Contoh teks paragraph. Warna muted membuat teks ringan dan tidak mengganggu komponen utama di sekitarnya."
+    p1.Size=UDim2.new(1,0,0,0); p1.AutomaticSize=Enum.AutomaticSize.Y
+    p1.BackgroundTransparency=1; p1.TextColor3=C.TEXT_MUTED
+    p1.Font=Enum.Font.Gotham; p1.TextSize=11
+    p1.TextXAlignment=Enum.TextXAlignment.Left
+    p1.TextWrapped=true; p1.ZIndex=16; p1.Parent=sec
+    addTheme(p1, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+    local sec2 = mkSection(pParagraph, "Teks Dinamis")
+    mkLabel(sec2, "Status saat ini")
+    local dynStatus = Instance.new("TextLabel")
+    dynStatus.Text="Idle — belum ada aksi"
+    dynStatus.Size=UDim2.new(1,0,0,0); dynStatus.AutomaticSize=Enum.AutomaticSize.Y
+    dynStatus.BackgroundTransparency=1; dynStatus.TextColor3=C.ACCENT2
+    dynStatus.Font=Enum.Font.GothamBold; dynStatus.TextSize=13
+    dynStatus.TextXAlignment=Enum.TextXAlignment.Left
+    dynStatus.TextWrapped=true; dynStatus.ZIndex=16; dynStatus.Parent=sec2
+    paraRefs.status = dynStatus
+
+    mkLabel(sec2, "Nilai offset")
+    local dynOffset = Instance.new("TextLabel")
+    dynOffset.Text="-1.2"
+    dynOffset.Size=UDim2.new(1,0,0,20)
+    dynOffset.BackgroundTransparency=1; dynOffset.TextColor3=C.HIGHLIGHT
+    dynOffset.Font=Enum.Font.GothamBold; dynOffset.TextSize=18
+    dynOffset.TextXAlignment=Enum.TextXAlignment.Left; dynOffset.ZIndex=16; dynOffset.Parent=sec2
+    paraRefs.offset = dynOffset
+end
+
+-- ════════════════════════════════════════
+--  TAB 7: PROGRAMMATIC DEMO
+-- ════════════════════════════════════════
+local pProgrammatic = mkPanel("programmatic")
+
+do
+    local sec = mkSection(pProgrammatic, "Simulasi Aksi")
+    local desc = Instance.new("TextLabel")
+    desc.Text="Klik tombol untuk mensimulasikan aksi dari kode. Semua komponen (toggle, teks, toast) akan terupdate serentak."
+    desc.Size=UDim2.new(1,0,0,0); desc.AutomaticSize=Enum.AutomaticSize.Y
+    desc.BackgroundTransparency=1; desc.TextColor3=C.TEXT_MUTED
+    desc.Font=Enum.Font.Gotham; desc.TextSize=11
+    desc.TextXAlignment=Enum.TextXAlignment.Left; desc.TextWrapped=true; desc.ZIndex=16; desc.Parent=sec
+    addTheme(desc, "TextColor3", DARK.TEXT_MUTED, LIGHT.TEXT_MUTED)
+
+    local row = Instance.new("Frame")
+    row.Size=UDim2.new(1,0,0,0); row.AutomaticSize=Enum.AutomaticSize.Y
+    row.BackgroundTransparency=1; row.ZIndex=15; row.Parent=sec
+    mkList(row, 8, Enum.FillDirection.Horizontal)
+
+    local function mkDemoBtn(label, bg, fg, cb)
+        local b = Instance.new("TextButton")
+        b.Size=UDim2.new(0,0,0,36); b.AutomaticSize=Enum.AutomaticSize.X
+        b.BackgroundColor3=bg; b.TextColor3=fg
+        b.Text="  "..label.."  "; b.Font=Enum.Font.GothamBold; b.TextSize=11
+        b.BorderSizePixel=0; b.ZIndex=16; b.Parent=row
+        mkCorner(b, 10)
+        b.MouseEnter:Connect(function() tw(b,{BackgroundColor3=C.BORDER_HI},0.12) end)
+        b.MouseLeave:Connect(function() tw(b,{BackgroundColor3=bg},0.12) end)
+        b.MouseButton1Click:Connect(cb)
+        return b
+    end
+
+    mkDemoBtn("▶ Play", C.ACCENT, C.WHITE, function()
+        setToggle("autoPlay", true)
+        if paraRefs.status then
+            paraRefs.status.Text="▶ Playing — karakter sedang berjalan"
+            paraRefs.status.TextColor3=C.SUCCESS
+        end
+        if inputRefs.speed then inputRefs.speed.Text="66" end
+        showToast("success", "Playback Mulai", "Karakter mengikuti rekaman.")
+    end)
+
+    mkDemoBtn("⏹ Stop", C.ELEVATED, C.TEXT, function()
+        setToggle("autoPlay", false)
+        if paraRefs.status then
+            paraRefs.status.Text="⏹ Stopped — playback berhenti"
+            paraRefs.status.TextColor3=C.TEXT_MUTED
+        end
+        if inputRefs.speed then inputRefs.speed.Text="16" end
+        showToast("info", "Berhenti", "Playback dihentikan.")
+    end)
+
+    mkDemoBtn("✕ Error", Color3.fromRGB(50,18,30), C.ERROR, function()
+        setToggle("autoPlay", false); setToggle("groundSnap", false)
+        if paraRefs.status then
+            paraRefs.status.Text="✕ Error — gagal memuat data"
+            paraRefs.status.TextColor3=C.ERROR
+        end
+        showToast("error", "HTTP Error", "Gagal mengambil data dari server.")
+    end)
+
+    local sec2 = mkSection(pProgrammatic, "API Referensi")
+    local function mkCodeLine(parent, txt)
+        local l = Instance.new("TextLabel")
+        l.Text=txt; l.Size=UDim2.new(1,0,0,0); l.AutomaticSize=Enum.AutomaticSize.Y
+        l.BackgroundColor3=C.BG; l.TextColor3=C.ACCENT2
+        l.Font=Enum.Font.Code; l.TextSize=10
+        l.TextXAlignment=Enum.TextXAlignment.Left; l.TextWrapped=true; l.ZIndex=16; l.Parent=parent
+        mkCorner(l, 6); mkPad(l, 10, 6)
+        addTheme(l, "BackgroundColor3", DARK.BG, LIGHT.ELEVATED)
+        addTheme(l, "TextColor3", DARK.ACCENT2, LIGHT.ACCENT2)
+        return l
+    end
+
+    mkCodeLine(sec2, "setToggle('groundSnap', true/false)")
+    mkCodeLine(sec2, "getToggle('earlyJump')  --> boolean")
+    mkCodeLine(sec2, "inputRefs.speed.Text = '66'")
+    mkCodeLine(sec2, "inputRefs.topDelay.Text = '0.3'")
+    mkCodeLine(sec2, "paraRefs.status.Text = 'Playing...'")
+    mkCodeLine(sec2, "showToast('success', 'Judul', 'Pesan')")
+    mkCodeLine(sec2, "switchTab('toggles')")
+end
+
+-- ════════════════════════════════════════
+--  MINIMIZE & CLOSE
+-- ════════════════════════════════════════
+
+btnMinimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        -- Sembunyikan window, tampilkan FAB
+        tw(win, {Size=UDim2.new(1,-(SCREEN_PAD*2),0,0)}, 0.2)
+        task.delay(0.22, function() win.Visible = false end)
+        fab.Visible = true
+        tw(fab, {BackgroundTransparency=0}, 0.2)
+        showToast("info", "Diminimize", "Tap ikon untuk membuka kembali")
+    else
+        -- Tampilkan window, sembunyikan FAB
+        win.Visible = true
+        tw(win, {Size=UDim2.new(1,-(SCREEN_PAD*2),0,WIN_H_MAX)}, 0.2)
+        fab.Visible = false
+    end
+    btnMinimize.Text = minimized and "□" or "−"
+end)
+
+fab.MouseButton1Click:Connect(function()
+    if fabMoved then fabMoved = false; return end  -- abaikan kalau habis drag
+    minimized = false
+    win.Visible = true
+    tw(win, {Size=UDim2.new(1,-(SCREEN_PAD*2),0,WIN_H_MAX)}, 0.25, Enum.EasingStyle.Back)
+    fab.Visible = false
+    btnMinimize.Text = "−"
+end)
+
+btnClose.MouseButton1Click:Connect(function()
+    tw(win, {BackgroundTransparency=1, Size=UDim2.new(1,-(SCREEN_PAD*2),0,0)}, 0.2)
+    task.delay(0.22, function()
+        win:Destroy()
+        fab:Destroy()
+        showToast("warn","Window Ditutup","Reload untuk membuka kembali.")
+    end)
+end)
+
+-- ════════════════════════════════════════
+--  DRAGGABLE WINDOW
+-- ════════════════════════════════════════
+local dragging, dragStart, winStart = false, nil, nil
+titleBar.InputBegan:Connect(function(inp)
+    if inp.UserInputType==Enum.UserInputType.MouseButton1
+    or inp.UserInputType==Enum.UserInputType.Touch then
+        dragging=true; dragStart=inp.Position; winStart=win.Position
+    end
+end)
+titleBar.InputEnded:Connect(function(inp)
+    if inp.UserInputType==Enum.UserInputType.MouseButton1
+    or inp.UserInputType==Enum.UserInputType.Touch then
+        dragging=false
+    end
+end)
+UserInputService.InputChanged:Connect(function(inp)
+    if not dragging then return end
+    if inp.UserInputType~=Enum.UserInputType.MouseMovement
+    and inp.UserInputType~=Enum.UserInputType.Touch then return end
+    local delta = inp.Position - dragStart
+    win.Position = UDim2.new(
+        winStart.X.Scale, winStart.X.Offset + delta.X,
+        winStart.Y.Scale, winStart.Y.Offset + delta.Y
+    )
+end)
+
+-- ════════════════════════════════════════
+--  INIT
+-- ════════════════════════════════════════
+switchTab("buttons")
+
+-- ════════════════════════════════════════
+--  EXPORTS / PUBLIC API
+-- ════════════════════════════════════════
+--  setToggle("id", true/false)
+--  getToggle("id")  --> boolean
+--  switchTab("nama_tab")
+--  showToast("info"/"success"/"warn"/"error", "Judul", "Pesan", durasi?)
+--  inputRefs.topDelay.Text = "0.5"
+--  inputRefs.bottomDelay.Text = "1.0"
+--  inputRefs.speed.Text = "66"
+--  inputRefs.name.Text = "PlayerName"
+--  inputRefs.url.Text = "https://..."
+--  paraRefs.status.Text = "Playing..."
+--  paraRefs.status.TextColor3 = C.SUCCESS
+--  paraRefs.offset.Text = "-1.2"
+--  dropOnSelect = function(name, url) print(name, url) end

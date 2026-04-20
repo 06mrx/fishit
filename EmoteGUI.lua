@@ -36,7 +36,7 @@ local emoteData = {}
 local ok, result = pcall(function()
 	local raw = game:HttpGet(CONFIG.DATA_URL)
 	local fn = loadstring(raw)
-	assert(fn, "loadstring gagal — cek format Lua di URL")
+	-- assert(fn, "loadstring gagal — cek format Lua di URL")
 	return fn()
 end)
 

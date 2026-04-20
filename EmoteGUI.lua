@@ -101,15 +101,42 @@ for i, emote in ipairs(emoteData) do
     img.BackgroundTransparency = 1
     img.Image = emote.icon or ""
     
-    cell.MouseButton1Click:Connect(function()
+    -- Tambahkan servis ini di bagian atas script
+local ContentProvider = game:GetService("ContentProvider")
+
+-- Ganti bagian cell.MouseButton1Click menjadi ini:
+cell.MouseButton1Click:Connect(function()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local animator = hum and hum:FindFirstChildOfClass("Animator")
+    
+    if animator then
         local anim = Instance.new("Animation")
         anim.AnimationId = "rbxassetid://" .. emote.id
-        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            local track = hum:FindFirstChildOfClass("Animator"):LoadAnimation(anim)
-            track:Play()
+        
+        -- Preload animasi agar tidak gagal saat dimainkan
+        pcall(function()
+            ContentProvider:PreloadAsync({anim})
+        end)
+
+        -- Stop animasi sebelumnya
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            if track.Name == "EmoteTrack" then track:Stop() end
         end
-    end)
+
+        local success, track = pcall(function()
+            return animator:LoadAnimation(anim)
+        end)
+
+        if success and track then
+            track.Name = "EmoteTrack"
+            track.Priority = Enum.AnimationPriority.Action
+            track:Play()
+        else
+            warn("Gagal memuat animasi ID: " .. emote.id)
+        end
+    end
+end)
 end
 
 -- Logic Minimize

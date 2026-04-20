@@ -1,13 +1,10 @@
--- Emote GUI for Executor
--- Target: Roblox Executor (Luau)
-
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local HttpService      = game:GetService("HttpService")
 local CoreGui          = game:GetService("CoreGui")
 
 local player    = Players.LocalPlayer
--- Menggunakan CoreGui atau gethui() agar UI tetap ada meski player mati
 local targetGui = (gethui and gethui()) or CoreGui:FindFirstChild("RobloxGui") or CoreGui
 
 -- =============================================
@@ -22,44 +19,38 @@ local CONFIG = {
 }
 
 -- =============================================
--- FETCH DATA
+-- FETCH & DECODE JSON (Perbaikan Baris 40)
 -- =============================================
 local emoteData = {}
 
-local HttpService = game:GetService("HttpService")
-local emoteData = {}
-
-local function fetchData()
+local function loadEmoteData()
     local success, raw = pcall(function()
         return game:HttpGet(CONFIG.DATA_URL)
     end)
-    
-    if success then
-        -- Gunakan JSONDecode karena format data adalah JSON, bukan Lua Table
-        local decodeSuccess, result = pcall(function()
+
+    if success and raw then
+        -- Gunakan JSONDecode, bukan loadstring karena datanya format JSON
+        local decodeOk, result = pcall(function()
             return HttpService:JSONDecode(raw)
         end)
-        
-        if decodeSuccess and result and result.emotes then
-            return result.emotes -- Mengambil array dari dalam key "emotes"
-        else
-            warn("[PARTY NiCH] Gagal decode JSON atau format 'emotes' tidak ditemukan")
+
+        if decodeOk and result and result.emotes then
+            return result.emotes
         end
-    else
-        warn("[PARTY NiCH] Gagal mengambil data dari URL")
     end
-    
-    -- Fallback data jika link error
+
+    -- Fallback jika URL gagal/format salah
+    warn("[PARTY NiCH] Gagal fetch JSON, menggunakan data cadangan.")
     return {
-        { name = "Point2",  id = 3576823880, index = 1,  price = 0   },
-        { name = "Shrug",   id = 3576968026, index = 2,  price = 0   },
+        { name = "Point2",  id = 3576823880, index = 1,  price = 0 },
+        { name = "Shrug",   id = 3576968026, index = 2,  price = 0 }
     }
 end
 
-emoteData = fetchData()
+emoteData = loadEmoteData()
 
 -- =============================================
--- UKURAN & POSISI
+-- HITUNG UKURAN PANEL
 -- =============================================
 local COLS     = CONFIG.COLUMNS
 local CSIZE    = CONFIG.CELL_SIZE
@@ -71,108 +62,57 @@ local FULL_H   = HEADER_H + SCROLL_H
 local CANVAS_H = math.ceil(#emoteData / COLS) * (CSIZE + CPAD) + CPAD
 
 -- =============================================
--- BUILD UI
+-- UI CONSTRUCTION
 -- =============================================
--- Hapus UI lama jika sudah ada (cegah duplikat saat re-run script)
-if targetGui:FindFirstChild("EmoteGUI_Exec") then
-    targetGui.EmoteGUI_Exec:Destroy()
+if targetGui:FindFirstChild("EmoteGUI_Fixed") then
+    targetGui.EmoteGUI_Fixed:Destroy()
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "EmoteGUI_Exec"
+screenGui.Name = "EmoteGUI_Fixed"
 screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true -- Agar posisi lebih akurat
 screenGui.Parent = targetGui
 
-local panel = Instance.new("Frame")
-panel.Name = "MainPanel"
+local panel = Instance.new("Frame", screenGui)
+panel.Name = "Panel"
 panel.Size = UDim2.new(0, TOTAL_W, 0, FULL_H)
-panel.Position = UDim2.new(0.5, -TOTAL_W / 2, 0.7, -FULL_H / 2)
+panel.Position = UDim2.new(0.5, -TOTAL_W / 2, 1, -(FULL_H + 50))
 panel.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
 panel.BorderSizePixel = 0
-panel.Active = true
-panel.Draggable = false -- Kita pakai custom lerp dragging di bawah
-panel.Parent = screenGui
+panel.ClipsDescendants = true
 
 Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 10)
 local panelStroke = Instance.new("UIStroke", panel)
 panelStroke.Color = Color3.fromRGB(60, 60, 78)
-panelStroke.Thickness = 1
 
 -- Header
 local header = Instance.new("Frame", panel)
 header.Size = UDim2.new(1, 0, 0, HEADER_H)
 header.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
 header.BorderSizePixel = 0
-Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
-
--- Fix corner bawah header (agar tajam)
-local hFix = Instance.new("Frame", header)
-hFix.Size = UDim2.new(1, 0, 0, 10)
-hFix.Position = UDim2.new(0, 0, 1, -10)
-hFix.BackgroundColor3 = Color3.fromRGB(32, 32, 42)
-hFix.BorderSizePixel = 0
 
 local titleLabel = Instance.new("TextLabel", header)
-titleLabel.Size = UDim2.new(1, -60, 1, 0)
-titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.Size = UDim2.new(1, -50, 1, 0)
+titleLabel.Position = UDim2.new(0, 12, 0, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "PARTY NiCH  ·  " .. #emoteData
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 14
 titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 13
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local minBtn = Instance.new("TextButton", header)
-minBtn.Size = UDim2.new(0, 28, 0, 28)
-minBtn.Position = UDim2.new(1, -34, 0.5, -14)
-minBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
-minBtn.Text = "—"
-minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-minBtn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
-
--- Scroll
+-- Scrolling Content
 local scrollFrame = Instance.new("ScrollingFrame", panel)
 scrollFrame.Size = UDim2.new(1, 0, 1, -HEADER_H)
 scrollFrame.Position = UDim2.new(0, 0, 0, HEADER_H)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
-scrollFrame.ScrollBarThickness = 3
-scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(140, 90, 255)
+scrollFrame.ScrollBarThickness = 2
 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, CANVAS_H)
 
 -- =============================================
--- LOGIC EMOTE
+-- EMOTE LOGIC
 -- =============================================
-local playing = nil
-local currentTrack = nil
-
-local function playEmote(emoteId)
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local animator = hum and hum:FindFirstChildOfClass("Animator")
-    
-    if not animator then return end
-
-    -- Stop track sebelumnya
-    if currentTrack then currentTrack:Stop() end
-    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-        if track.Name == "EmoteTrack" then track:Stop() end
-    end
-
-    local anim = Instance.new("Animation")
-    anim.AnimationId = "rbxassetid://" .. emoteId
-    
-    local success, track = pcall(function() return animator:LoadAnimation(anim) end)
-    if success then
-        track.Name = "EmoteTrack"
-        track.Priority = Enum.AnimationPriority.Action
-        track:Play()
-        currentTrack = track
-    end
-end
-
 local function makeCell(emote, idx)
     local col = (idx - 1) % COLS
     local row = math.floor((idx - 1) / COLS)
@@ -182,30 +122,40 @@ local function makeCell(emote, idx)
     cell.Position = UDim2.new(0, CPAD + col * (CSIZE + CPAD), 0, CPAD + row * (CSIZE + CPAD))
     cell.BackgroundColor3 = Color3.fromRGB(36, 36, 48)
     cell.Text = ""
-    cell.AutoButtonColor = false
     Instance.new("UICorner", cell).CornerRadius = UDim.new(0, 8)
-    
-    local stroke = Instance.new("UIStroke", cell)
-    stroke.Color = Color3.fromRGB(55, 55, 72)
 
-    local nameLabel = Instance.new("TextLabel", cell)
-    nameLabel.Size = UDim2.new(1, -4, 0, 20)
-    nameLabel.Position = UDim2.new(0, 2, 1, -22)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = emote.name
-    nameLabel.TextColor3 = Color3.fromRGB(185, 185, 205)
-    nameLabel.TextSize = 10
-    nameLabel.Font = Enum.Font.Gotham
+    local img = Instance.new("ImageLabel", cell)
+    img.Size = UDim2.new(1, -10, 1, -25)
+    img.Position = UDim2.new(0, 5, 0, 5)
+    img.BackgroundTransparency = 1
+    -- Gunakan icon dari JSON jika ada
+    img.Image = emote.icon or "rbxthumb://type=Asset&id=" .. emote.id .. "&w=150&h=150"
+
+    local name = Instance.new("TextLabel", cell)
+    name.Size = UDim2.new(1, 0, 0, 15)
+    name.Position = UDim2.new(0, 0, 1, -18)
+    name.BackgroundTransparency = 1
+    name.Text = emote.name
+    name.TextColor3 = Color3.fromRGB(200, 200, 200)
+    name.TextSize = 9
+    name.Font = Enum.Font.Gotham
 
     cell.MouseButton1Click:Connect(function()
-        playEmote(emote.id)
+        local char = player.Character
+        local animator = char and char:FindFirstChildOfClass("Humanoid") and char.Humanoid:FindFirstChildOfClass("Animator")
         
-        -- Animasi Feedback Klik
-        if playing then 
-            TweenService:Create(playing.UIStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(55, 55, 72)}):Play()
+        if animator then
+            -- Stop emote sebelumnya
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                if track.Name == "EmoteTrack" then track:Stop() end
+            end
+
+            local anim = Instance.new("Animation")
+            anim.AnimationId = "rbxassetid://" .. emote.id
+            local track = animator:LoadAnimation(anim)
+            track.Name = "EmoteTrack"
+            track:Play()
         end
-        playing = cell
-        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(140, 90, 255)}):Play()
     end)
 end
 
@@ -213,29 +163,13 @@ for i, emote in ipairs(emoteData) do
     makeCell(emote, i)
 end
 
--- =============================================
--- SYSTEM: DRAG & MINIMIZE
--- =============================================
-local isMinimized = false
-minBtn.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    minBtn.Text = isMinimized and "+" or "—"
-    scrollFrame.Visible = not isMinimized
-    panel:TweenSize(UDim2.new(0, TOTAL_W, 0, isMinimized and HEADER_H or FULL_H), "Out", "Quart", 0.25, true)
-end)
-
--- Dragging Logic
-local dragging, dragInput, dragStart, startPos
+-- Simple Dragging
+local dragging, dragStart, startPos
 header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
         startPos = panel.Position
-    end
-end)
-header.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
@@ -244,5 +178,6 @@ UserInputService.InputChanged:Connect(function(input)
         panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
-
-print("[PARTY NiCH] Emote GUI Loaded!")
+header.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)

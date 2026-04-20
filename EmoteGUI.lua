@@ -26,28 +26,33 @@ local CONFIG = {
 -- =============================================
 local emoteData = {}
 
+local HttpService = game:GetService("HttpService")
+local emoteData = {}
+
 local function fetchData()
     local success, raw = pcall(function()
         return game:HttpGet(CONFIG.DATA_URL)
     end)
     
     if success then
-        local fn, err = loadstring(raw)
-        if fn then
-            local result = fn()
-            if type(result) == "table" then return result end
+        -- Gunakan JSONDecode karena format data adalah JSON, bukan Lua Table
+        local decodeSuccess, result = pcall(function()
+            return HttpService:JSONDecode(raw)
+        end)
+        
+        if decodeSuccess and result and result.emotes then
+            return result.emotes -- Mengambil array dari dalam key "emotes"
+        else
+            warn("[PARTY NiCH] Gagal decode JSON atau format 'emotes' tidak ditemukan")
         end
+    else
+        warn("[PARTY NiCH] Gagal mengambil data dari URL")
     end
     
-    -- Fallback data jika link mati/error
+    -- Fallback data jika link error
     return {
         { name = "Point2",  id = 3576823880, index = 1,  price = 0   },
         { name = "Shrug",   id = 3576968026, index = 2,  price = 0   },
-        { name = "Hello",   id = 3576686446, index = 3,  price = 0   },
-        { name = "Tilt",    id = 3576969227, index = 4,  price = 0   },
-        { name = "Smile",   id = 3576823583, index = 5,  price = 0   },
-        { name = "Applaud", id = 3576968047, index = 6,  price = 0   },
-        { name = "Stadium", id = 3576947969, index = 7,  price = 150 },
     }
 end
 

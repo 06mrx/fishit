@@ -103,6 +103,7 @@ outputArea.TextColor3 = Color3.fromRGB(0, 255, 0)
 outputArea.Font = Enum.Font.Code
 outputArea.TextSize = 10
 outputArea.Parent = container
+outputArea.ClearTextOnFocus = false
 Instance.new("UICorner", outputArea)
 
 -- 5. INPUT NAMA OUTFIT (FOR SAVING)

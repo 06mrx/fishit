@@ -4,7 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
 -- Remote Event (Pastikan namanya sama di Server)
-local avatarEvent = ReplicatedStorage:WaitForChild("ChangeAvatarEvent")
+local avatarEvent = nil
 
 local ADMINS = {
 	["inidiayangkumaoo"] = true, -- ID Admin 1

@@ -106,6 +106,7 @@ outputArea.Parent = container
 outputArea.ClearTextOnFocus = false
 Instance.new("UICorner", outputArea)
 
+
 -- 5. INPUT NAMA OUTFIT (FOR SAVING)
 local nameInput = Instance.new("TextBox")
 nameInput.Size = UDim2.new(1, 0, 0, 35)
